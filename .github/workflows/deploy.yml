@@ -1,0 +1,54 @@
+name: terraform-ci
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+
+jobs:
+  terraform:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.7.5
+
+      - name: Terraform fmt
+        working-directory: infra
+        run: terraform fmt -check -recursive
+
+      - name: Terraform init
+        working-directory: infra
+        run: terraform init -backend=false
+
+      - name: Terraform validate
+        working-directory: infra
+        run: terraform validate
+
+      # Security scan (lightweight)
+      - name: Checkov scan
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          directory: infra
+          framework: terraform
+        continue-on-error: true
+
+      - name: Terraform plan (placeholder)
+        working-directory: infra
+        run: |
+          echo "Plan step placeholder. In real CI you would configure AWS creds via OIDC or secrets."
+          terraform plan -out=tfplan || true
+
+      - name: Post-deploy test execution placeholder
+        run: |
+          echo "Placeholder: here you would run tests/run_test.py after deployment."
+          echo "Example:"
+          echo "  pip install -r tests/requirements.txt"
+          echo "  python tests/run_test.py"
