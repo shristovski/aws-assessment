@@ -48,14 +48,7 @@ resource "null_resource" "set_password" {
   }
 
   provisioner "local-exec" {
-    command = <<EOT
-aws cognito-idp admin-set-user-password \
-  --region us-east-1 \
-  --user-pool-id ${aws_cognito_user_pool.this.id} \
-  --username "${var.email}" \
-  --password "${var.password}" \
-  --permanent
-EOT
+    command = "aws cognito-idp admin-set-user-password --region us-east-1 --user-pool-id ${aws_cognito_user_pool.this.id} --username \"${var.email}\" --password \"${var.password}\" --permanent"
   }
 
   depends_on = [aws_cognito_user.test]
