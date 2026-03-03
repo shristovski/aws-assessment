@@ -21,13 +21,16 @@ resource "aws_internet_gateway" "igw" {
 
 resource "aws_route_table" "public" {
   vpc_id = aws_vpc.this.id
+
   route {
     cidr_block = "0.0.0.0/0"
     gateway_id = aws_internet_gateway.igw.id
   }
+
   tags = { Name = "${local.name_prefix}-rt-public" }
 }
 
+# checkov:skip=CKV_AWS_130: Public subnets required to avoid NAT Gateway charges per assessment requirements
 resource "aws_subnet" "public_a" {
   vpc_id                  = aws_vpc.this.id
   cidr_block              = "10.50.1.0/24"
@@ -36,6 +39,7 @@ resource "aws_subnet" "public_a" {
   tags                    = { Name = "${local.name_prefix}-subnet-public-a" }
 }
 
+# checkov:skip=CKV_AWS_130: Public subnets required to avoid NAT Gateway charges per assessment requirements
 resource "aws_subnet" "public_b" {
   vpc_id                  = aws_vpc.this.id
   cidr_block              = "10.50.2.0/24"
@@ -48,6 +52,7 @@ resource "aws_route_table_association" "a" {
   subnet_id      = aws_subnet.public_a.id
   route_table_id = aws_route_table.public.id
 }
+
 resource "aws_route_table_association" "b" {
   subnet_id      = aws_subnet.public_b.id
   route_table_id = aws_route_table.public.id
@@ -55,15 +60,31 @@ resource "aws_route_table_association" "b" {
 
 resource "aws_security_group" "ecs_task" {
   name        = "${local.name_prefix}-ecs-task-sg"
-  description = "Allow outbound only"
+  description = "ECS task security group (outbound HTTPS only)"
   vpc_id      = aws_vpc.this.id
 
+  # Restrict outbound to HTTPS only (SNS publish, AWS APIs)
   egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
+    description = "Allow outbound HTTPS"
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
+}
+
+############################
+# KMS key (regional) for DynamoDB encryption (CMK)
+############################
+resource "aws_kms_key" "ddb" {
+  description             = "KMS CMK for DynamoDB table encryption (${local.name_prefix})"
+  deletion_window_in_days = 7
+  enable_key_rotation     = true
+}
+
+resource "aws_kms_alias" "ddb" {
+  name          = "alias/${local.name_prefix}-ddb"
+  target_key_id = aws_kms_key.ddb.key_id
 }
 
 ############################
@@ -77,6 +98,17 @@ resource "aws_dynamodb_table" "greeting_logs" {
   attribute {
     name = "pk"
     type = "S"
+  }
+
+  # Enable PITR (backup)
+  point_in_time_recovery {
+    enabled = true
+  }
+
+  # Use customer-managed CMK
+  server_side_encryption {
+    enabled     = true
+    kms_key_arn = aws_kms_key.ddb.arn
   }
 }
 
@@ -109,6 +141,7 @@ resource "aws_iam_role_policy_attachment" "greeter_basic" {
 resource "aws_iam_role_policy" "greeter_policy" {
   name = "${local.name_prefix}-greeter-policy"
   role = aws_iam_role.greeter_role.id
+
   policy = jsonencode({
     Version = "2012-10-17",
     Statement = [
@@ -118,15 +151,18 @@ resource "aws_iam_role_policy" "greeter_policy" {
         Resource = aws_dynamodb_table.greeting_logs.arn
       },
       {
-        Effect = "Allow",
-        Action = ["sns:Publish"],
-        # Topic is in us-east-1 (cross-region publish ok, we’ll force client region in code)
+        Effect   = "Allow",
+        Action   = ["sns:Publish"],
         Resource = var.verification_sns_topic_arn
       }
     ]
   })
 }
 
+# checkov:skip=CKV_AWS_117: Lambda intentionally not placed in VPC to avoid NAT (SNS/Dynamo public endpoints needed for assessment)
+# checkov:skip=CKV_AWS_116: DLQ omitted for short-lived assessment functions
+# checkov:skip=CKV_AWS_272: Code signing validation out of scope for assessment
+# checkov:skip=CKV_AWS_50: X-Ray tracing optional/out of scope for this assessment
 resource "aws_lambda_function" "greeter" {
   function_name = "${local.name_prefix}-greeter"
   role          = aws_iam_role.greeter_role.arn
@@ -192,6 +228,7 @@ resource "aws_iam_role" "ecs_task_role" {
 resource "aws_iam_role_policy" "ecs_task_publish" {
   name = "${local.name_prefix}-ecs-task-publish"
   role = aws_iam_role.ecs_task_role.id
+
   policy = jsonencode({
     Version = "2012-10-17",
     Statement = [{
@@ -226,7 +263,6 @@ resource "aws_ecs_task_definition" "publisher" {
       }
     }
 
-    # Publish to SNS in us-east-1 and exit
     command = [
       "sh", "-lc",
       "aws sns publish --region us-east-1 --topic-arn ${var.verification_sns_topic_arn} --message '{\"email\":\"${var.email}\",\"source\":\"ECS\",\"region\":\"${var.region}\",\"repo\":\"${var.repo_url}\"}' && echo done"
@@ -263,15 +299,14 @@ resource "aws_iam_role_policy_attachment" "dispatcher_basic" {
 resource "aws_iam_role_policy" "dispatcher_policy" {
   name = "${local.name_prefix}-dispatcher-policy"
   role = aws_iam_role.dispatcher_role.id
+
   policy = jsonencode({
     Version = "2012-10-17",
     Statement = [
       {
-        Effect = "Allow",
-        Action = ["ecs:RunTask"],
-        Resource = [
-          aws_ecs_task_definition.publisher.arn
-        ]
+        Effect   = "Allow",
+        Action   = ["ecs:RunTask"],
+        Resource = [aws_ecs_task_definition.publisher.arn]
       },
       {
         Effect   = "Allow",
@@ -290,6 +325,10 @@ resource "aws_iam_role_policy" "dispatcher_policy" {
   })
 }
 
+# checkov:skip=CKV_AWS_117: Lambda intentionally not placed in VPC to avoid NAT (SNS/Dynamo public endpoints needed for assessment)
+# checkov:skip=CKV_AWS_116: DLQ omitted for short-lived assessment functions
+# checkov:skip=CKV_AWS_272: Code signing validation out of scope for assessment
+# checkov:skip=CKV_AWS_50: X-Ray tracing optional/out of scope for this assessment
 resource "aws_lambda_function" "dispatcher" {
   function_name = "${local.name_prefix}-dispatcher"
   role          = aws_iam_role.dispatcher_role.arn

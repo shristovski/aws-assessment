@@ -30,6 +30,7 @@ cd infra
 
 terraform init
 
+# PowerShell example
 terraform apply `
   -var="email=your_email@example.com" `
   -var="repo_url=https://github.com/<user>/aws-assessment" `
