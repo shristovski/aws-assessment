@@ -1,5 +1,5 @@
 variable "email" {
-  description = "Your real email address used with recruiting team"
+  description = "email address"
   type        = string
 }
 

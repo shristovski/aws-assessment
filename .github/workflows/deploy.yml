@@ -2,7 +2,7 @@ name: terraform-ci
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
   pull_request:
 
 jobs:
@@ -11,20 +11,25 @@ jobs:
     permissions:
       contents: read
 
+    defaults:
+      run:
+        shell: bash
+
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.7.5
+          terraform_wrapper: false
 
-      - name: Terraform fmt
+      - name: Terraform format check
         working-directory: infra
         run: terraform fmt -check -recursive
 
-      - name: Terraform init
+      - name: Terraform init (no backend in CI)
         working-directory: infra
         run: terraform init -backend=false
 
@@ -32,23 +37,37 @@ jobs:
         working-directory: infra
         run: terraform validate
 
-      # Security scan (lightweight)
-      - name: Checkov scan
+      - name: Static security scan (Checkov)
         uses: bridgecrewio/checkov-action@v12
         with:
           directory: infra
           framework: terraform
-        continue-on-error: true
+          quiet: true
+          soft_fail: true
 
-      - name: Terraform plan (placeholder)
+      - name: Terraform plan (dry run)
         working-directory: infra
         run: |
-          echo "Plan step placeholder. In real CI you would configure AWS creds via OIDC or secrets."
-          terraform plan -out=tfplan || true
+          echo "Generating Terraform plan (dry run)."
+          echo "Note: This workflow does not configure AWS credentials; the plan may not fully evaluate in CI."
+          terraform plan -no-color -out=tfplan || true
 
-      - name: Post-deploy test execution placeholder
+      - name: Upload plan artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: terraform-plan
+          path: infra/tfplan
+          if-no-files-found: ignore
+
+      - name: Post-deploy integration tests (placeholder)
         run: |
-          echo "Placeholder: here you would run tests/run_test.py after deployment."
-          echo "Example:"
+          echo "Post-deployment test stage placeholder."
+          echo "In a deployment workflow, this job would run after 'terraform apply' with AWS credentials configured."
+          echo "Expected actions:"
+          echo "  - Authenticate to Cognito to obtain a JWT"
+          echo "  - Call /greet and /dispatch endpoints in both regions concurrently"
+          echo "  - Assert the returned region matches and print latency metrics"
+          echo ""
+          echo "Example commands:"
           echo "  pip install -r tests/requirements.txt"
           echo "  python tests/run_test.py"

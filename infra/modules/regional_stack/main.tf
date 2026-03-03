@@ -11,7 +11,7 @@ resource "aws_vpc" "this" {
   cidr_block           = "10.50.0.0/16"
   enable_dns_support   = true
   enable_dns_hostnames = true
-  tags = { Name = "${local.name_prefix}-vpc" }
+  tags                 = { Name = "${local.name_prefix}-vpc" }
 }
 
 resource "aws_internet_gateway" "igw" {
@@ -33,7 +33,7 @@ resource "aws_subnet" "public_a" {
   cidr_block              = "10.50.1.0/24"
   map_public_ip_on_launch = true
   availability_zone       = "${var.region}a"
-  tags = { Name = "${local.name_prefix}-subnet-public-a" }
+  tags                    = { Name = "${local.name_prefix}-subnet-public-a" }
 }
 
 resource "aws_subnet" "public_b" {
@@ -41,7 +41,7 @@ resource "aws_subnet" "public_b" {
   cidr_block              = "10.50.2.0/24"
   map_public_ip_on_launch = true
   availability_zone       = "${var.region}b"
-  tags = { Name = "${local.name_prefix}-subnet-public-b" }
+  tags                    = { Name = "${local.name_prefix}-subnet-public-b" }
 }
 
 resource "aws_route_table_association" "a" {
@@ -94,8 +94,8 @@ resource "aws_iam_role" "greeter_role" {
   assume_role_policy = jsonencode({
     Version = "2012-10-17",
     Statement = [{
-      Action = "sts:AssumeRole",
-      Effect = "Allow",
+      Action    = "sts:AssumeRole",
+      Effect    = "Allow",
       Principal = { Service = "lambda.amazonaws.com" }
     }]
   })
@@ -113,8 +113,8 @@ resource "aws_iam_role_policy" "greeter_policy" {
     Version = "2012-10-17",
     Statement = [
       {
-        Effect = "Allow",
-        Action = ["dynamodb:PutItem"],
+        Effect   = "Allow",
+        Action   = ["dynamodb:PutItem"],
         Resource = aws_dynamodb_table.greeting_logs.arn
       },
       {
@@ -138,12 +138,12 @@ resource "aws_lambda_function" "greeter" {
 
   environment {
     variables = {
-      DDB_TABLE             = aws_dynamodb_table.greeting_logs.name
-      SNS_TOPIC_ARN         = var.verification_sns_topic_arn
-      EMAIL                 = var.email
-      REPO_URL              = var.repo_url
-      EXEC_REGION           = var.region
-      SNS_PUBLISH_REGION    = "us-east-1"
+      DDB_TABLE          = aws_dynamodb_table.greeting_logs.name
+      SNS_TOPIC_ARN      = var.verification_sns_topic_arn
+      EMAIL              = var.email
+      REPO_URL           = var.repo_url
+      EXEC_REGION        = var.region
+      SNS_PUBLISH_REGION = "us-east-1"
     }
   }
 }
@@ -165,9 +165,9 @@ resource "aws_iam_role" "ecs_execution_role" {
   assume_role_policy = jsonencode({
     Version = "2012-10-17",
     Statement = [{
-      Effect = "Allow",
+      Effect    = "Allow",
       Principal = { Service = "ecs-tasks.amazonaws.com" },
-      Action = "sts:AssumeRole"
+      Action    = "sts:AssumeRole"
     }]
   })
 }
@@ -182,9 +182,9 @@ resource "aws_iam_role" "ecs_task_role" {
   assume_role_policy = jsonencode({
     Version = "2012-10-17",
     Statement = [{
-      Effect = "Allow",
+      Effect    = "Allow",
       Principal = { Service = "ecs-tasks.amazonaws.com" },
-      Action = "sts:AssumeRole"
+      Action    = "sts:AssumeRole"
     }]
   })
 }
@@ -248,8 +248,8 @@ resource "aws_iam_role" "dispatcher_role" {
   assume_role_policy = jsonencode({
     Version = "2012-10-17",
     Statement = [{
-      Action = "sts:AssumeRole",
-      Effect = "Allow",
+      Action    = "sts:AssumeRole",
+      Effect    = "Allow",
       Principal = { Service = "lambda.amazonaws.com" }
     }]
   })
@@ -274,8 +274,8 @@ resource "aws_iam_role_policy" "dispatcher_policy" {
         ]
       },
       {
-        Effect = "Allow",
-        Action = ["ecs:DescribeTasks", "ecs:DescribeTaskDefinition", "ecs:DescribeClusters"],
+        Effect   = "Allow",
+        Action   = ["ecs:DescribeTasks", "ecs:DescribeTaskDefinition", "ecs:DescribeClusters"],
         Resource = "*"
       },
       {
@@ -301,11 +301,11 @@ resource "aws_lambda_function" "dispatcher" {
 
   environment {
     variables = {
-      EXEC_REGION   = var.region
-      CLUSTER_ARN   = aws_ecs_cluster.this.arn
-      TASK_DEF_ARN  = aws_ecs_task_definition.publisher.arn
-      SUBNETS       = join(",", [aws_subnet.public_a.id, aws_subnet.public_b.id])
-      SECURITY_GRP  = aws_security_group.ecs_task.id
+      EXEC_REGION  = var.region
+      CLUSTER_ARN  = aws_ecs_cluster.this.arn
+      TASK_DEF_ARN = aws_ecs_task_definition.publisher.arn
+      SUBNETS      = join(",", [aws_subnet.public_a.id, aws_subnet.public_b.id])
+      SECURITY_GRP = aws_security_group.ecs_task.id
     }
   }
 }
@@ -380,8 +380,4 @@ resource "aws_lambda_permission" "allow_apigw_dispatch" {
   function_name = aws_lambda_function.dispatcher.function_name
   principal     = "apigateway.amazonaws.com"
   source_arn    = "${aws_apigatewayv2_api.this.execution_arn}/*/*"
-}
-
-output "api_base_url" {
-  value = aws_apigatewayv2_api.this.api_endpoint
 }

@@ -36,8 +36,8 @@ resource "aws_cognito_user" "test" {
   }
 
   # Create without sending email
-  message_action      = "SUPPRESS"
-  temporary_password  = "TempPassw0rd!234" # will be immediately overridden
+  message_action     = "SUPPRESS"
+  temporary_password = "TempPassw0rd!234" # will be immediately overridden
 }
 
 # Set a permanent password so tests can authenticate without NEW_PASSWORD_REQUIRED
