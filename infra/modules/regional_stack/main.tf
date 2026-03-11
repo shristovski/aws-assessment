@@ -179,7 +179,7 @@ resource "aws_lambda_function" "greeter" {
       SNS_TOPIC_ARN      = var.verification_sns_topic_arn
       EMAIL              = var.email
       REPO_URL           = var.repo_url
-        EXEC_REGION        = var.region
+      EXEC_REGION        = var.region
       SNS_PUBLISH_REGION = local.sns_region
     }
   }
