@@ -1,4 +1,5 @@
 variable "region" { type = string }
+variable "vpc_cidr" { type = string }
 
 variable "email" { type = string }
 variable "repo_url" { type = string }

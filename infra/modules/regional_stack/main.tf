@@ -2,13 +2,14 @@ data "aws_region" "current" {}
 
 locals {
   name_prefix = "unleash-${var.region}"
+  sns_region  = split(":", var.verification_sns_topic_arn)[3]
 }
 
 ############################
 # VPC (public subnets only)
 ############################
 resource "aws_vpc" "this" {
-  cidr_block           = "10.50.0.0/16"
+  cidr_block           = var.vpc_cidr
   enable_dns_support   = true
   enable_dns_hostnames = true
   tags                 = { Name = "${local.name_prefix}-vpc" }
@@ -33,7 +34,7 @@ resource "aws_route_table" "public" {
 # checkov:skip=CKV_AWS_130: Public subnets required to avoid NAT Gateway charges per assessment requirements
 resource "aws_subnet" "public_a" {
   vpc_id                  = aws_vpc.this.id
-  cidr_block              = "10.50.1.0/24"
+  cidr_block              = cidrsubnet(var.vpc_cidr, 8, 1)
   map_public_ip_on_launch = true
   availability_zone       = "${var.region}a"
   tags                    = { Name = "${local.name_prefix}-subnet-public-a" }
@@ -42,7 +43,7 @@ resource "aws_subnet" "public_a" {
 # checkov:skip=CKV_AWS_130: Public subnets required to avoid NAT Gateway charges per assessment requirements
 resource "aws_subnet" "public_b" {
   vpc_id                  = aws_vpc.this.id
-  cidr_block              = "10.50.2.0/24"
+  cidr_block              = cidrsubnet(var.vpc_cidr, 8, 2)
   map_public_ip_on_launch = true
   availability_zone       = "${var.region}b"
   tags                    = { Name = "${local.name_prefix}-subnet-public-b" }
@@ -178,10 +179,15 @@ resource "aws_lambda_function" "greeter" {
       SNS_TOPIC_ARN      = var.verification_sns_topic_arn
       EMAIL              = var.email
       REPO_URL           = var.repo_url
-      EXEC_REGION        = var.region
-      SNS_PUBLISH_REGION = "us-east-1"
+        EXEC_REGION        = var.region
+      SNS_PUBLISH_REGION = local.sns_region
     }
   }
+}
+
+resource "aws_cloudwatch_log_group" "greeter" {
+  name              = "/aws/lambda/${aws_lambda_function.greeter.function_name}"
+  retention_in_days = 7
 }
 
 ############################
@@ -265,7 +271,7 @@ resource "aws_ecs_task_definition" "publisher" {
 
     command = [
       "sh", "-lc",
-      "aws sns publish --region us-east-1 --topic-arn ${var.verification_sns_topic_arn} --message '{\"email\":\"${var.email}\",\"source\":\"ECS\",\"region\":\"${var.region}\",\"repo\":\"${var.repo_url}\"}' && echo done"
+      "aws sns publish --region ${local.sns_region} --topic-arn ${var.verification_sns_topic_arn} --message '{\"email\":\"${var.email}\",\"source\":\"ECS\",\"region\":\"${var.region}\",\"repo\":\"${var.repo_url}\"}' && echo done"
     ]
   }])
 }
@@ -347,6 +353,11 @@ resource "aws_lambda_function" "dispatcher" {
       SECURITY_GRP = aws_security_group.ecs_task.id
     }
   }
+}
+
+resource "aws_cloudwatch_log_group" "dispatcher" {
+  name              = "/aws/lambda/${aws_lambda_function.dispatcher.function_name}"
+  retention_in_days = 7
 }
 
 ############################

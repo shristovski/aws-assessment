@@ -26,6 +26,7 @@ module "stack_r1" {
   cognito_user_pool_arn       = module.cognito.user_pool_arn
   cognito_user_pool_client_id = module.cognito.user_pool_client_id
   verification_sns_topic_arn  = var.verification_sns_topic_arn
+  vpc_cidr                    = "10.50.0.0/16"
 }
 
 module "stack_r2" {
@@ -38,4 +39,5 @@ module "stack_r2" {
   cognito_user_pool_arn       = module.cognito.user_pool_arn
   cognito_user_pool_client_id = module.cognito.user_pool_client_id
   verification_sns_topic_arn  = var.verification_sns_topic_arn
+  vpc_cidr                    = "10.51.0.0/16"
 }
